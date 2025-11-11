@@ -3,6 +3,8 @@ import re
 from fastapi.middleware.cors import CORSMiddleware
 import joblib, numpy as np
 import tempfile, os
+from fastapi.staticfiles import StaticFiles
+from starlette.responses import FileResponse
 
 from api.ifc_extract_lib import extract_ifc_parameters
 from schemas import ColumnFeatures, PredictionResponse
@@ -17,6 +19,10 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Serve Vite built assets if present
+if os.path.isdir(FRONTEND_DIST):
+    app.mount("/assets", StaticFiles(directory=os.path.join(FRONTEND_DIST, "assets")), name="assets")
 
 # --- Load both models ---
 CLASSIFIER_PATH = os.path.join(os.path.dirname(__file__), "random_forest_classifier.pkl")
@@ -145,3 +151,18 @@ async def extract_and_predict(
         "count": len(preds),
         "parameters": {"deviation_tolerance": tol},
     }
+
+# SPA index.html fallback routes (keep after API routes)
+@app.get("/", include_in_schema=False)
+def serve_index_root():
+    index_path = os.path.join(FRONTEND_DIST, "index.html")
+    if os.path.exists(index_path):
+        return FileResponse(index_path)
+    return {"message": "Frontend build not found"}
+
+@app.get("/{full_path:path}", include_in_schema=False)
+def serve_spa(full_path: str):
+    index_path = os.path.join(FRONTEND_DIST, "index.html")
+    if os.path.exists(index_path):
+        return FileResponse(index_path)
+    return {"message": "Frontend build not found"}
